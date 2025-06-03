@@ -4,10 +4,10 @@ const xmlrpc = require('xmlrpc');
 const app = express();
 
 // Odoo server and database details
-const url = 'https://your-odoo-instance-url';  // Change this to your Odoo instance URL
-const db = 'your-database-name';
-const username = 'your-username';
-const password = 'your-password';
+const url = process.env.ODOO_URL || '';  // Change this to your Odoo instance URL
+const db = process.env.ODOO_DB || '';
+const username = process.env.ODOO_USERNAME || '';
+const password = process.env.ODOO_PASSWORD || '';
 
 // XML-RPC client setup
 const common = xmlrpc.createClient({ url: `${url}/xmlrpc/2/common` });
