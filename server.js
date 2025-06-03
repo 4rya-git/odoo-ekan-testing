@@ -12,6 +12,11 @@ app.post('/webhook', (req, res) => {
     res.status(200).send('✅ Webhook received');
 });
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.status(200).send('✅ Server is healthy');
+});
+
 // Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
