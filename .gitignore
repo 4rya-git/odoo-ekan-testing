@@ -1,3 +1,4 @@
 node_modules/
 txt.txt
 .env
+lambda_function.js
