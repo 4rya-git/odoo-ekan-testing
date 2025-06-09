@@ -30,6 +30,8 @@ app.post('/webhook', (req, res) => {
     const invoice_origin = req.body.invoice_origin;  // This will likely reference the sales order
     const payment_state = req.body.payment_state;
     const currency_id = req.body.currency_id;
+    const amount_untaxed = req.body.amount_untaxed;
+    const amount_total = req.body.amount_total;
 
     // Step 1: Authenticate with Odoo
     common.methodCall('authenticate', [db, username, password, {}], (error, uid) => {
@@ -111,6 +113,8 @@ app.post('/webhook', (req, res) => {
                             partner_id: partner_id,
                             payment_state: payment_state,
                             currency_id: currency_id,
+                            amount_untaxed: amount_untaxed,
+                            amount_total: amount_total,
                             customer: customerDetails,
                             order_note: plainOrderNote,  // Include the sales order note
                             products: products,
