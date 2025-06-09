@@ -58,8 +58,8 @@ app.post('/webhook', (req, res) => {
                 }
             };
 
-            // Step 3: Fetch invoice line details
-            const invoiceLineFields = ['product_id', 'quantity', 'price_unit', 'move_id'];  // We also fetch 'move_id' to link with sales order
+            // Step 3: Fetch invoice line details, including move_id (sales order reference)
+            const invoiceLineFields = ['product_id', 'quantity', 'price_unit', 'move_id', 'note'];  // Note added to each line
             models.methodCall('execute_kw', [db, uid, password, 'account.move.line', 'read', [invoice_line_ids], { fields: invoiceLineFields }], (err, invoiceLineData) => {
                 if (err) {
                     console.error('❌ Error fetching invoice line data:', err);
@@ -68,15 +68,18 @@ app.post('/webhook', (req, res) => {
 
                 const moveIds = invoiceLineData.map(line => line.move_id[0]);  // Extract move_id (sale order related)
 
-                // Step 4: Fetch sales order details (including note) from sale.order
-                models.methodCall('execute_kw', [db, uid, password, 'sale.order', 'read', [moveIds], { fields: ['note'] }], (err, saleOrderData) => {
+                // Step 4: Fetch general sales order notes (from sale.order model)
+                models.methodCall('execute_kw', [db, uid, password, 'sale.order', 'read', [moveIds], { fields: ['note', 'internal_notes'] }], (err, saleOrderData) => {
                     if (err) {
                         console.error('❌ Error fetching sales order details:', err);
                         return res.status(500).send('Internal Server Error');
                     }
 
                     const saleOrderNotes = saleOrderData.reduce((notesMap, order) => {
-                        notesMap[order.id] = order.note || '';  // Store notes in a map by sale order id
+                        notesMap[order.id] = {
+                            general_note: order.note || '',  // General note field for the sales order
+                            internal_notes: order.internal_notes || ''  // Internal notes field
+                        };
                         return notesMap;
                     }, {});
 
@@ -90,15 +93,18 @@ app.post('/webhook', (req, res) => {
                             return res.status(500).send('Internal Server Error');
                         }
 
+                        // Step 6: Combine product data, sales order data, and line-specific notes
                         const products = invoiceLineData.map(line => {
                             const product = productsData.find(p => p.id === line.product_id[0]);
-                            const saleOrderNote = saleOrderNotes[line.move_id[0]] || '';  // Get note from map
+                            const saleOrderNote = saleOrderNotes[line.move_id[0]] || {};
                             return {
                                 product_name: product?.name || '',
                                 product_code: product?.default_code || '',
                                 quantity: line.quantity,
                                 price_unit: line.price_unit,
-                                sale_order_note: saleOrderNote,  // Add note to the product info
+                                line_note: line.note || '',  // Line-specific note
+                                general_note: saleOrderNote.general_note,  // General order note
+                                internal_notes: saleOrderNote.internal_notes  // Internal notes
                             };
                         });
 
@@ -108,7 +114,7 @@ app.post('/webhook', (req, res) => {
                             products: products,
                         };
 
-                        console.log('🎯 Webhook Data with Customer, Product, and Sales Order Notes:');
+                        console.log('🎯 Webhook Data with Customer, Product, and Notes Info:');
                         console.log(JSON.stringify(responseData, null, 2));
                         res.status(200).send('✅ Webhook received and processed successfully');
                     });
