@@ -22,12 +22,14 @@ function stripHtml(html) {
 
 // Webhook endpoint
 app.post('/webhook', (req, res) => {
-    console.log('📦 Received webhook data from Odoo:');
-    console.log(JSON.stringify(req.body, null, 2));
+    // console.log('📦 Received webhook data from Odoo:');
+    // console.log(JSON.stringify(req.body, null, 2));
 
     const partner_id = req.body.partner_id;
     const invoice_line_ids = req.body.invoice_line_ids;
     const invoice_origin = req.body.invoice_origin;  // This will likely reference the sales order
+    const payment_state = req.body.payment_state;
+    const currency_id = req.body.currency_id;
 
     // Step 1: Authenticate with Odoo
     common.methodCall('authenticate', [db, username, password, {}], (error, uid) => {
@@ -105,9 +107,13 @@ app.post('/webhook', (req, res) => {
 
                         // Combined response data with sales order note
                         const responseData = {
+                            invoice_origin: invoice_origin,
+                            partner_id: partner_id,
+                            payment_state: payment_state,
+                            currency_id: currency_id,
                             customer: customerDetails,
-                            products: products,
                             order_note: plainOrderNote,  // Include the sales order note
+                            products: products,
                         };
 
                         console.log('🎯 Webhook Data with Customer, Product, and Order Note Info:');
