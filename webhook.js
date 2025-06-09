@@ -22,8 +22,8 @@ function stripHtml(html) {
 
 // Webhook endpoint
 app.post('/webhook', (req, res) => {
-    // console.log('📦 Received webhook data from Odoo:');
-    // console.log(JSON.stringify(req.body, null, 2));
+    console.log('📦 Received webhook data from Odoo:');
+    console.log(JSON.stringify(req.body, null, 2));
 
     const partner_id = req.body.partner_id;
     const invoice_line_ids = req.body.invoice_line_ids;
