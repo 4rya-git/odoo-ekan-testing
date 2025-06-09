@@ -23,6 +23,7 @@ app.post('/webhook', (req, res) => {
 
     const partner_id = req.body.partner_id;
     const invoice_line_ids = req.body.invoice_line_ids;
+    const invoice_origin = req.body.invoice_origin;  // This will likely reference the sales order
 
     // Step 1: Authenticate with Odoo
     common.methodCall('authenticate', [db, username, password, {}], (error, uid) => {
@@ -58,63 +59,53 @@ app.post('/webhook', (req, res) => {
                 }
             };
 
-            // Step 3: Fetch invoice line details, including move_id (sales order reference)
-            const invoiceLineFields = ['product_id', 'quantity', 'price_unit', 'move_id', 'note'];  // Note added to each line
-            models.methodCall('execute_kw', [db, uid, password, 'account.move.line', 'read', [invoice_line_ids], { fields: invoiceLineFields }], (err, invoiceLineData) => {
+            // Step 3: Fetch the sales order note (from sale.order) using invoice_origin
+            const saleOrderFields = ['note'];  // Fetch only the note field
+            models.methodCall('execute_kw', [db, uid, password, 'sale.order', 'search_read', [[['name', '=', invoice_origin]]], { fields: saleOrderFields }], (err, saleOrderData) => {
                 if (err) {
-                    console.error('❌ Error fetching invoice line data:', err);
+                    console.error('❌ Error fetching sales order data:', err);
                     return res.status(500).send('Internal Server Error');
                 }
 
-                const moveIds = invoiceLineData.map(line => line.move_id[0]);  // Extract move_id (sale order related)
+                // Assuming invoice_origin corresponds to the sale order name
+                const orderNote = saleOrderData.length > 0 ? saleOrderData[0].note : '';  // Default to empty if no note
 
-                // Step 4: Fetch general sales order notes (from sale.order model)
-                models.methodCall('execute_kw', [db, uid, password, 'sale.order', 'read', [moveIds], { fields: ['note', 'internal_notes'] }], (err, saleOrderData) => {
+                // Step 4: Fetch invoice line details
+                const invoiceLineFields = ['product_id', 'quantity', 'price_unit'];
+                models.methodCall('execute_kw', [db, uid, password, 'account.move.line', 'read', [invoice_line_ids], { fields: invoiceLineFields }], (err, invoiceLineData) => {
                     if (err) {
-                        console.error('❌ Error fetching sales order details:', err);
+                        console.error('❌ Error fetching invoice line data:', err);
                         return res.status(500).send('Internal Server Error');
                     }
 
-                    const saleOrderNotes = saleOrderData.reduce((notesMap, order) => {
-                        notesMap[order.id] = {
-                            general_note: order.note || '',  // General note field for the sales order
-                            internal_notes: order.internal_notes || ''  // Internal notes field
-                        };
-                        return notesMap;
-                    }, {});
-
-                    // Step 5: Fetch product details
                     const productIds = invoiceLineData.map(line => line.product_id[0]);
                     const productFields = ['name', 'default_code'];
 
+                    // Step 5: Fetch product details
                     models.methodCall('execute_kw', [db, uid, password, 'product.product', 'read', [productIds], { fields: productFields }], (err, productsData) => {
                         if (err) {
                             console.error('❌ Error fetching product details:', err);
                             return res.status(500).send('Internal Server Error');
                         }
 
-                        // Step 6: Combine product data, sales order data, and line-specific notes
                         const products = invoiceLineData.map(line => {
                             const product = productsData.find(p => p.id === line.product_id[0]);
-                            const saleOrderNote = saleOrderNotes[line.move_id[0]] || {};
                             return {
                                 product_name: product?.name || '',
                                 product_code: product?.default_code || '',
                                 quantity: line.quantity,
                                 price_unit: line.price_unit,
-                                line_note: line.note || '',  // Line-specific note
-                                general_note: saleOrderNote.general_note,  // General order note
-                                internal_notes: saleOrderNote.internal_notes  // Internal notes
                             };
                         });
 
-                        // Combined response data
+                        // Combined response data with sales order note
                         const responseData = {
                             customer: customerDetails,
                             products: products,
+                            order_note: orderNote,  // Include the sales order note
                         };
 
-                        console.log('🎯 Webhook Data with Customer, Product, and Notes Info:');
+                        console.log('🎯 Webhook Data with Customer, Product, and Order Note Info:');
                         console.log(JSON.stringify(responseData, null, 2));
                         res.status(200).send('✅ Webhook received and processed successfully');
                     });
