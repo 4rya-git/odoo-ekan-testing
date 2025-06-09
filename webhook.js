@@ -59,42 +59,59 @@ app.post('/webhook', (req, res) => {
             };
 
             // Step 3: Fetch invoice line details
-            const invoiceLineFields = ['product_id', 'quantity', 'price_unit'];
+            const invoiceLineFields = ['product_id', 'quantity', 'price_unit', 'move_id'];  // We also fetch 'move_id' to link with sales order
             models.methodCall('execute_kw', [db, uid, password, 'account.move.line', 'read', [invoice_line_ids], { fields: invoiceLineFields }], (err, invoiceLineData) => {
                 if (err) {
                     console.error('❌ Error fetching invoice line data:', err);
                     return res.status(500).send('Internal Server Error');
                 }
 
-                const productIds = invoiceLineData.map(line => line.product_id[0]);
-                const productFields = ['name', 'default_code'];
+                const moveIds = invoiceLineData.map(line => line.move_id[0]);  // Extract move_id (sale order related)
 
-                // Step 4: Fetch product details
-                models.methodCall('execute_kw', [db, uid, password, 'product.product', 'read', [productIds], { fields: productFields }], (err, productsData) => {
+                // Step 4: Fetch sales order details (including note) from sale.order
+                models.methodCall('execute_kw', [db, uid, password, 'sale.order', 'read', [moveIds], { fields: ['note'] }], (err, saleOrderData) => {
                     if (err) {
-                        console.error('❌ Error fetching product details:', err);
+                        console.error('❌ Error fetching sales order details:', err);
                         return res.status(500).send('Internal Server Error');
                     }
 
-                    const products = invoiceLineData.map(line => {
-                        const product = productsData.find(p => p.id === line.product_id[0]);
-                        return {
-                            product_name: product?.name || '',
-                            product_code: product?.default_code || '',
-                            quantity: line.quantity,
-                            price_unit: line.price_unit,
+                    const saleOrderNotes = saleOrderData.reduce((notesMap, order) => {
+                        notesMap[order.id] = order.note || '';  // Store notes in a map by sale order id
+                        return notesMap;
+                    }, {});
+
+                    // Step 5: Fetch product details
+                    const productIds = invoiceLineData.map(line => line.product_id[0]);
+                    const productFields = ['name', 'default_code'];
+
+                    models.methodCall('execute_kw', [db, uid, password, 'product.product', 'read', [productIds], { fields: productFields }], (err, productsData) => {
+                        if (err) {
+                            console.error('❌ Error fetching product details:', err);
+                            return res.status(500).send('Internal Server Error');
+                        }
+
+                        const products = invoiceLineData.map(line => {
+                            const product = productsData.find(p => p.id === line.product_id[0]);
+                            const saleOrderNote = saleOrderNotes[line.move_id[0]] || '';  // Get note from map
+                            return {
+                                product_name: product?.name || '',
+                                product_code: product?.default_code || '',
+                                quantity: line.quantity,
+                                price_unit: line.price_unit,
+                                sale_order_note: saleOrderNote,  // Add note to the product info
+                            };
+                        });
+
+                        // Combined response data
+                        const responseData = {
+                            customer: customerDetails,
+                            products: products,
                         };
+
+                        console.log('🎯 Webhook Data with Customer, Product, and Sales Order Notes:');
+                        console.log(JSON.stringify(responseData, null, 2));
+                        res.status(200).send('✅ Webhook received and processed successfully');
                     });
-
-                    // Combined response data
-                    const responseData = {
-                        customer: customerDetails,
-                        products: products,
-                    };
-
-                    console.log('🎯 Webhook Data with Customer and Product Info:');
-                    console.log(JSON.stringify(responseData, null, 2));
-                    res.status(200).send('✅ Webhook received and processed successfully');
                 });
             });
         });
