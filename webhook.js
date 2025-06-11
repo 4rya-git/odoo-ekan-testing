@@ -16,9 +16,9 @@ const models = xmlrpc.createClient({ url: `${url}/xmlrpc/2/object` });
 // Middleware to parse JSON bodies
 app.use(express.json());
 
-function stripHtml(html) {
-    return html.replace(/<[^>]*>/g, '');  // Removes HTML tags
-}
+// function stripHtml(html) {
+//     return html.replace(/<[^>]*>/g, '');  // Removes HTML tags
+// }
 
 // Webhook endpoint
 app.post('/webhook', (req, res) => {
@@ -77,7 +77,7 @@ app.post('/webhook', (req, res) => {
 
                 // Assuming invoice_origin corresponds to the sale order name
                 const orderNote = saleOrderData.length > 0 ? saleOrderData[0].note : '';  // Default to empty if no note
-                const plainOrderNote = stripHtml(orderNote);
+                const plainOrderNote = orderNote;
 
                 // Step 4: Fetch invoice line details
                 const invoiceLineFields = ['product_id', 'quantity', 'price_unit'];
